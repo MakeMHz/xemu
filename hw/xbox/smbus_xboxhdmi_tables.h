@@ -1,7 +1,7 @@
 /*
- * QEMU Xbox System Emulator
+ * QEMU SMBus MakeMHz XboxHDMI Device
  *
- * Copyright (c) 2013 espes
+ * Copyright (c) 2020 Dustin Holden
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -22,19 +22,13 @@
  * THE SOFTWARE.
  */
 
-#ifndef HW_SMBUS_H
-#define HW_SMBUS_H
+#include "qemu/osdep.h"
 
-void smbus_xbox_smc_init(I2CBus *smbus, int address);
-void smbus_cx25871_init(I2CBus *smbus, int address);
-void smbus_adm1032_init(I2CBus *smbus, int address);
-void smbus_xboxhdmi_init(I2CBus *smbus, int address);
-void smbus_xboxhdmi_timing_init(I2CBus *smbus, int address);
+#ifndef HW_SMBUS_XBOXHDMI_TABLES_H
+#define HW_SMBUS_XBOXHDMI_TABLES_H
 
-bool xbox_smc_avpack_to_reg(const char *avpack, uint8_t *value);
-void xbox_smc_append_avpack_hint(Error **errp);
-void xbox_smc_power_button(void);
-void xbox_smc_eject_button(void);
-void xbox_smc_update_tray_state(void);
+extern const uint32_t AvpRegisters[][26];
+extern uint8_t  AvpCRTCRegisters[][34];
+extern uint32_t AvpFpDebug0[];
 
 #endif

@@ -317,6 +317,7 @@ void xbox_init_common(MachineState *machine,
     smbus_cx25871_init(smbus, 0x45);
     smbus_adm1032_init(smbus, 0x4c);
     smbus_xboxhdmi_init(smbus, 0x44);
+    smbus_xboxhdmi_timing_init(smbus, 0x43);
 
     /* USB */
     PCIDevice *usb1 = pci_new(PCI_DEVFN(3, 0), "pci-ohci");

@@ -30,6 +30,8 @@
 #include "hw/i2c/smbus_slave.h"
 #include "smbus.h"
 #include "qapi/error.h"
+#include "smbus_xboxhdmi.h"
+#include "smbus_xboxhdmi_tables.h"
 
 #define TYPE_SMBUS_XBOXHDMI "smbus-xboxhdmi"
 #define SMBUS_XBOXHDMI(obj) OBJECT_CHECK(SMBusXboxHDMIDevice, (obj), TYPE_SMBUS_XBOXHDMI)
@@ -43,9 +45,14 @@
 
 typedef struct SMBusXboxHDMIDevice {
     SMBusDevice smbusdev;
-    uint8_t registers[256]; // https://github.com/MakeMHz/xbox-hdmi-app/blob/master/source/i2c_map.h
+    SMBusXboxHDMIRegisters registers; // https://github.com/MakeMHz/xbox-hdmi-app/blob/master/source/i2c_map.h
     uint8_t cmd;
 } SMBusXboxHDMIDevice;
+
+// HACK
+extern uint8_t  *cAvpRegister;
+extern uint8_t  *cAvpCRTCRegister;
+extern uint32_t *cAvpFpDebug0;
 
 // TODO: optional?
 static void smbus_xboxhdmi_quick_cmd(SMBusDevice *dev, uint8_t read)
@@ -64,11 +71,26 @@ static int smbus_xboxhdmi_write_data(SMBusDevice *dev, uint8_t *buf, uint8_t len
 
     if (len < 1) return 0;
 
-    DPRINTF("%s: addr=0x%02X cmd=0x%02X val=0x%02X\n",
-            __func__, dev->i2c.address, cmd, buf[0]);
+    // The XboxHDMI processes each byte of the transfer so lets do the same here
+    for(uint8_t index = 0; index < len; index++) {
+        DPRINTF("%s: addr=0x%02X cmd=0x%02X val=0x%02X\n",
+                __func__, dev->i2c.address, cmd + index, buf[index]);
 
-    // TODO: command handler
-    memcpy(cx->registers + cmd, buf, MIN(len, 256 - cmd));
+        // Update register
+        ((uint8_t *)&cx->registers)[cmd + index] = buf[index];
+
+        // Check if video mode is being updated
+        if(cmd == XBOXHDMI_REG_INDEX_BY_NAME(video_mode_post) + 3) {
+            DPRINTF("%s: Updating timing tables\n", __func__);
+
+            uint8_t iCRTC     = (cx->registers.video_mode_post & 0x0000FF00) >> 8;
+            uint8_t iRegister = (cx->registers.video_mode_post & 0x00FF0000) >> 16;
+
+            cAvpCRTCRegister = (uint8_t *)&AvpCRTCRegisters[iCRTC - 1];
+            cAvpRegister     = (uint8_t *)&AvpRegisters[iRegister - 1];
+            cAvpFpDebug0     = (uint32_t *)&AvpFpDebug0[iRegister - 1];
+        }
+    }
 
     return 0;
 }
@@ -78,7 +100,7 @@ static uint8_t smbus_xboxhdmi_receive_byte(SMBusDevice *dev)
     SMBusXboxHDMIDevice *cx = SMBUS_XBOXHDMI(dev);
 
     // TODO: command handler
-    uint8_t val = cx->registers[cx->cmd];
+    uint8_t val = ((uint8_t *)&cx->registers)[cx->cmd];
 
     DPRINTF("%s: addr=0x%02x cmd=0x%02X val=0x%02X\n",
             __func__, dev->i2c.address, cx->cmd, val);
@@ -91,8 +113,14 @@ static void smbus_xboxhdmi_realize(DeviceState *dev, Error **errp)
 {
     SMBusXboxHDMIDevice *cx = SMBUS_XBOXHDMI(dev);
 
-    // TODO: initialize mcu state here
-    memset(cx->registers, 0, 256);
+    // Clear memory
+    memset(&cx->registers, 0, sizeof(SMBusXboxHDMIRegisters));
+
+    // Set initial register values
+    cx->registers.firmware_version[0] = 1;
+    cx->registers.firmware_version[1] = 0;
+    cx->registers.firmware_version[2] = 2;
+
     cx->cmd = 0;
 }
 
